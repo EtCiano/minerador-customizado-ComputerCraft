@@ -1,303 +1,356 @@
--- ============================================================
---  Mining Turtle - Área configurável via input
---  Posição inicial: canto inferior esquerdo, camada 1 (Y mais baixo)
---  A tartaruga deve estar virada para +X (frente = direção das fileiras)
--- ============================================================
+--[[
+    MINERADOR AUTOMATICO - ComputerCraft
+    ------------------------------------
+    Pergunta a area (X, Y, Z) que a turtle deve minerar em formato de cubo,
+    mostra estatisticas da mineracao e, apos confirmacao, executa a mineracao
+    em padrao "cobra" (boustrophedon), descendo camada por camada.
 
--- ============================================================
---  Input interativo
--- ============================================================
+    Requisitos:
+      - Uma Mining Turtle (ou turtle comum com pickaxe equipada).
+      - Combustivel suficiente no inventario (ou ja abastecida).
+      - Recomendado: colocar a turtle EM CIMA de uma chest antes de iniciar.
+        Quando o inventario encher, ela volta ao ponto inicial e descarrega
+        os itens nessa chest (turtle.dropDown), depois continua o trabalho.
+]]
 
-local function lerNumero(prompt, minimo, maximo)
+------------------------------------------------------------
+-- ESTADO / POSICAO
+------------------------------------------------------------
+
+-- Posicao relativa ao ponto inicial (0,0,0)
+local pos = { x = 0, y = 0, z = 0 }
+
+-- Direcao atual (0,1,2,3) relativa a direcao inicial da turtle.
+-- Vetores de deslocamento (dx, dz) para cada direcao.
+local dirs = {
+    { dx = 0, dz = 1 },  -- 0
+    { dx = 1, dz = 0 },  -- 1
+    { dx = 0, dz = -1 }, -- 2
+    { dx = -1, dz = 0 }, -- 3
+}
+local facing = 0
+
+------------------------------------------------------------
+-- UTILITARIOS DE ENTRADA
+------------------------------------------------------------
+
+local function lerNumero(mensagem)
     while true do
-        io.write(prompt)
-        local entrada = io.read()
+        io.write(mensagem)
+        local entrada = read()
         local numero = tonumber(entrada)
-        if numero == nil then
-            print("  [!] Digite um numero valido.")
-        elseif numero < minimo or numero > maximo then
-            print("  [!] Valor deve ser entre " .. minimo .. " e " .. maximo .. ".")
-        else
+        if numero ~= nil and numero == math.floor(numero) and numero > 0 then
             return math.floor(numero)
         end
+        print("Valor invalido. Digite um numero inteiro maior que zero.")
     end
 end
 
-local function confirmar(prompt)
+local function lerSimNao(mensagem)
     while true do
-        io.write(prompt .. " (s/n): ")
-        local entrada = io.read():lower()
-        if entrada == "s" then return true
-        elseif entrada == "n" then return false
-        else print("  [!] Digite 's' para sim ou 'n' para nao.") end
+        io.write(mensagem .. " (s/n): ")
+        local entrada = string.lower(read() or "")
+        if entrada == "s" or entrada == "sim" then
+            return true
+        elseif entrada == "n" or entrada == "nao" or entrada == "não" then
+            return false
+        end
+        print("Responda com 's' ou 'n'.")
     end
 end
 
--- ============================================================
---  Tela de configuração
--- ============================================================
+------------------------------------------------------------
+-- COMBUSTIVEL
+------------------------------------------------------------
 
-term.clear()
-term.setCursorPos(1, 1)
-print("============================================")
-print("       Mining Turtle - Configuracao         ")
-print("============================================")
-print("")
-print("Posicione a tartaruga no canto inferior")
-print("esquerdo da area, virada para frente (+X).")
-print("")
-
-local LARGURA     = lerNumero("Largura     (eixo X, blocos por fileira) [1-100]: ", 1, 100)
-local COMPRIMENTO = lerNumero("Comprimento (eixo Z, num. de fileiras)   [1-100]: ", 1, 100)
-local CAMADAS     = lerNumero("Camadas     (eixo Y, altura para cima)   [1-50] : ", 1, 50)
-
-print("")
-print("--------------------------------------------")
-print("  Area:             " .. LARGURA .. " x " .. COMPRIMENTO .. " x " .. CAMADAS)
-print("  Total de blocos:  " .. (LARGURA * COMPRIMENTO * CAMADAS))
-print("  Combustivel atual: " .. turtle.getFuelLevel())
-print("--------------------------------------------")
-print("")
-
-if not confirmar("Confirmar e iniciar mineracao?") then
-    print("Cancelado.")
-    return
-end
-
-print("")
-print("Iniciando em 3 segundos...")
-sleep(3)
-
--- ============================================================
---  Rastreamento de posição relativa
---  Origem = (0, 0), direção inicial = +X
---
---  face: 0=+X  1=+Z  2=-X  3=-Z
---  pos.x, pos.z acompanham cada movimento
--- ============================================================
-
-local pos  = { x = 0, z = 0 }
-local face = 0   -- começa virado para +X
-
-local DELTA = {
-    [0] = { x =  1, z =  0 },  -- +X
-    [1] = { x =  0, z =  1 },  -- +Z
-    [2] = { x = -1, z =  0 },  -- -X
-    [3] = { x =  0, z = -1 },  -- -Z
-}
-
-local function virarEsquerda()
-    turtle.turnLeft()
-    face = (face - 1) % 4
-end
-
-local function virarDireita()
-    turtle.turnRight()
-    face = (face + 1) % 4
-end
-
--- ============================================================
---  Combustível
--- ============================================================
-
-local function reabastecer()
+local function tentarReabastecer()
+    if turtle.getFuelLevel() == "unlimited" then return end
     for slot = 1, 16 do
-        if turtle.getItemCount(slot) > 0 then
-            turtle.select(slot)
-            if turtle.refuel(0) then turtle.refuel() end
+        turtle.select(slot)
+        if turtle.refuel(0) then -- item no slot serve de combustivel?
+            turtle.refuel()
         end
     end
     turtle.select(1)
 end
 
-local function verificarCombustivel()
-    if turtle.getFuelLevel() < 20 then
-        reabastecer()
-        if turtle.getFuelLevel() < 5 then
-            print("[AVISO] Combustivel baixo! Adicione combustivel ao inventario.")
-            repeat sleep(5); reabastecer() until turtle.getFuelLevel() >= 5
-        end
-    end
+local function combustivelSuficiente(necessario)
+    if turtle.getFuelLevel() == "unlimited" then return true end
+    return turtle.getFuelLevel() >= necessario
 end
 
--- ============================================================
---  Movimentos — avançar MINERA; recuar NUNCA minera
--- ============================================================
+------------------------------------------------------------
+-- INVENTARIO
+------------------------------------------------------------
 
--- Avança 1 passo minerando obstáculos; atualiza pos
-local function moverFrente()
-    verificarCombustivel()
-    local tentativas = 0
-    while not turtle.forward() do
-        tentativas = tentativas + 1
-        if turtle.detect() then
-            turtle.dig()
-            sleep(0.2)
-        else
-            turtle.attack()
-            sleep(0.3)
-        end
-        if tentativas > 20 then
-            print("[ERRO] Nao foi possivel avancar apos 20 tentativas.")
-            break
+local function inventarioCheio()
+    for slot = 1, 16 do
+        if turtle.getItemCount(slot) == 0 then
+            return false
         end
     end
-    pos.x = pos.x + DELTA[face].x
-    pos.z = pos.z + DELTA[face].z
+    return true
 end
 
--- Recua 1 passo SEM minerar; atualiza pos
--- (turtle.back() nunca minera blocos)
-local function recuar()
-    verificarCombustivel()
-    local tentativas = 0
-    while not turtle.back() do
-        tentativas = tentativas + 1
+local function descarregarNaChestInicial()
+    -- Assume que ha uma chest embaixo do ponto inicial (0,0,0)
+    for slot = 1, 16 do
+        turtle.select(slot)
+        turtle.dropDown()
+    end
+    turtle.select(1)
+end
+
+------------------------------------------------------------
+-- MOVIMENTO SEGURO (cava obstaculos, trata gravidade/areia/cascalho)
+------------------------------------------------------------
+
+local function cavarFrenteSeNecessario()
+    while turtle.detect() do
+        if not turtle.dig() then break end
         sleep(0.3)
-        if tentativas > 20 then
-            print("[ERRO] Nao foi possivel recuar apos 20 tentativas.")
-            break
-        end
     end
-    -- recuar move no sentido oposto à face atual
-    pos.x = pos.x - DELTA[face].x
-    pos.z = pos.z - DELTA[face].z
 end
 
-local function moverCima()
-    verificarCombustivel()
-    local tentativas = 0
+local function cavarCimaSeNecessario()
+    while turtle.detectUp() do
+        if not turtle.digUp() then break end
+        sleep(0.3)
+    end
+end
+
+local function cavarBaixoSeNecessario()
+    while turtle.detectDown() do
+        if not turtle.digDown() then break end
+        sleep(0.3)
+    end
+end
+
+local function garantirCombustivel()
+    if turtle.getFuelLevel() ~= "unlimited" and turtle.getFuelLevel() < 5 then
+        tentarReabastecer()
+    end
+end
+
+local function mover_frente()
+    garantirCombustivel()
+    cavarFrenteSeNecessario()
+    while not turtle.forward() do
+        cavarFrenteSeNecessario()
+        turtle.attack()
+        sleep(0.3)
+    end
+    pos.x = pos.x + dirs[facing + 1].dx
+    pos.z = pos.z + dirs[facing + 1].dz
+end
+
+local function mover_cima()
+    garantirCombustivel()
+    cavarCimaSeNecessario()
     while not turtle.up() do
-        tentativas = tentativas + 1
-        if turtle.detectUp() then
-            turtle.digUp()
-            sleep(0.2)
-        else
-            turtle.attackUp()
-            sleep(0.3)
-        end
-        if tentativas > 20 then
-            print("[ERRO] Nao foi possivel subir apos 20 tentativas.")
-            break
-        end
+        cavarCimaSeNecessario()
+        turtle.attackUp()
+        sleep(0.3)
     end
+    pos.y = pos.y + 1
 end
 
-local function minarBaixo()
-    if turtle.detectDown() then turtle.digDown(); sleep(0.2) end
+local function mover_baixo()
+    garantirCombustivel()
+    cavarBaixoSeNecessario()
+    while not turtle.down() do
+        cavarBaixoSeNecessario()
+        turtle.attackDown()
+        sleep(0.3)
+    end
+    pos.y = pos.y - 1
 end
 
-local function minarCima()
-    if turtle.detectUp() then turtle.digUp(); sleep(0.2) end
+local function virar_direita()
+    turtle.turnRight()
+    facing = (facing + 1) % 4
 end
 
--- ============================================================
---  Virar para encarar uma face alvo (0..3)
--- ============================================================
+local function virar_esquerda()
+    turtle.turnLeft()
+    facing = (facing - 1) % 4
+end
 
-local function virarPara(alvo)
-    local diff = (alvo - face) % 4
+-- Vira a turtle para encarar uma direcao absoluta especifica (0..3)
+local function virarPara(direcaoAlvo)
+    local diff = (direcaoAlvo - facing) % 4
     if diff == 1 then
-        virarDireita()
+        virar_direita()
     elseif diff == 2 then
-        virarDireita(); virarDireita()
+        virar_direita()
+        virar_direita()
     elseif diff == 3 then
-        virarEsquerda()
+        virar_esquerda()
     end
-    -- diff == 0: já está na direção certa
 end
 
--- ============================================================
---  Retorno à origem (0,0) usando recuar() — SEM minerar nada
---
---  Estratégia: olha para o eixo com maior deslocamento,
---  recua até zerar, depois faz o outro eixo.
---  Usa turtle.back() via recuar(), que nunca minera.
--- ============================================================
+------------------------------------------------------------
+-- RETORNAR AO PONTO INICIAL (0,0,0) E VOLTAR DEPOIS
+------------------------------------------------------------
 
-local function retornarOrigem()
-    -- 1. Zera o eixo Z: precisa estar virado para ±Z
-    if pos.z ~= 0 then
-        -- Queremos recuar em Z, ou seja, mover em -Z se pos.z > 0
-        -- recuar() move no sentido oposto à face, então
-        -- se face aponta para +Z (face=1), recuar() move em -Z ✓
-        -- se face aponta para -Z (face=3), recuar() move em +Z ✓
-        -- precisamos estar virados para o eixo Z
-        if pos.z > 0 then
-            virarPara(1)   -- +Z: recuando iremos em -Z
-        else
-            virarPara(3)   -- -Z: recuando iremos em +Z
-        end
-        local passos = math.abs(pos.z)
-        for _ = 1, passos do recuar() end
+local function irParaCoordenada(destX, destY, destZ)
+    -- Ajusta Y primeiro
+    while pos.y < destY do mover_cima() end
+    while pos.y > destY do mover_baixo() end
+
+    -- Ajusta X
+    if pos.x < destX then
+        virarPara(1) -- direcao +x
+        while pos.x < destX do mover_frente() end
+    elseif pos.x > destX then
+        virarPara(3) -- direcao -x
+        while pos.x > destX do mover_frente() end
     end
 
-    -- 2. Zera o eixo X
-    if pos.x ~= 0 then
-        if pos.x > 0 then
-            virarPara(0)   -- +X: recuando iremos em -X
-        else
-            virarPara(2)   -- -X: recuando iremos em +X
-        end
-        local passos = math.abs(pos.x)
-        for _ = 1, passos do recuar() end
+    -- Ajusta Z
+    if pos.z < destZ then
+        virarPara(0) -- direcao +z
+        while pos.z < destZ do mover_frente() end
+    elseif pos.z > destZ then
+        virarPara(2) -- direcao -z
+        while pos.z > destZ do mover_frente() end
     end
-
-    -- 3. Reorienta para +X (face=0) pronto para próxima camada
-    virarPara(0)
 end
 
--- ============================================================
---  Serpentina de mineração numa camada
---
---  Fileiras ímpares (1,3,…) → percorridas em +X → vira esquerda p/ +Z
---  Fileiras pares   (2,4,…) → percorridas em -X → vira direita  p/ +Z
--- ============================================================
+local function verificarEDescarregar()
+    if inventarioCheio() then
+        print("Inventario cheio! Retornando ao ponto inicial para descarregar...")
+        local voltaX, voltaY, voltaZ, voltaFacing = pos.x, pos.y, pos.z, facing
+        irParaCoordenada(0, 0, 0)
+        descarregarNaChestInicial()
+        print("Descarregado. Retomando mineracao...")
+        irParaCoordenada(voltaX, voltaY, voltaZ)
+        virarPara(voltaFacing)
+    end
+end
 
-local function minerarCamada()
-    for linha = 1, COMPRIMENTO do
-        minarBaixo()
+------------------------------------------------------------
+-- ENTRADA DE DADOS DA AREA
+------------------------------------------------------------
 
-        for _ = 1, LARGURA - 1 do
-            moverFrente()
-            minarBaixo()
+term.clear()
+term.setCursorPos(1, 1)
+print("=== MINERADOR AUTOMATICO ===")
+print("Informe as dimensoes do cubo a ser minerado.")
+print("")
+
+local largura = lerNumero("Largura (eixo X): ")
+local profundidade = lerNumero("Comprimento (eixo Z): ")
+local altura = lerNumero("Altura/Profundidade (eixo Y, sentido para baixo): ")
+
+------------------------------------------------------------
+-- CALCULO DE ESTATISTICAS
+------------------------------------------------------------
+
+local totalBlocos = largura * profundidade * altura
+
+-- Estimativa de movimentos: percorre largura*profundidade em cada camada,
+-- mais os movimentos verticais entre camadas.
+local movimentosPorCamada = (largura * profundidade)
+local movimentosVerticais = (altura - 1)
+local totalMovimentosEstimados = (movimentosPorCamada * altura) + movimentosVerticais
+
+-- Estimativa de combustivel com margem de seguranca de 20%
+local combustivelEstimado = math.ceil(totalMovimentosEstimados * 1.2)
+
+local fuelAtual = turtle.getFuelLevel()
+local fuelTexto = (fuelAtual == "unlimited") and "ilimitado" or tostring(fuelAtual)
+
+print("")
+print("=== DADOS DA MINERACAO ===")
+print(string.format("Dimensoes: %d x %d x %d (X x Z x Y)", largura, profundidade, altura))
+print(string.format("Total de blocos na area: %d", totalBlocos))
+print(string.format("Movimentos estimados: %d", totalMovimentosEstimados))
+print(string.format("Combustivel necessario (estimado): %d", combustivelEstimado))
+print(string.format("Combustivel atual da turtle: %s", fuelTexto))
+print(string.format("Slots de inventario disponiveis: 16 (recomendado ter chest no ponto inicial)"))
+print("")
+
+if fuelAtual ~= "unlimited" and fuelAtual < combustivelEstimado then
+    print("AVISO: combustivel pode ser insuficiente!")
+    print("Tentando reabastecer automaticamente com itens do inventario...")
+    tentarReabastecer()
+    fuelAtual = turtle.getFuelLevel()
+    print(string.format("Combustivel apos tentativa de reabastecimento: %s",
+        (fuelAtual == "unlimited") and "ilimitado" or tostring(fuelAtual)))
+    if fuelAtual ~= "unlimited" and fuelAtual < combustivelEstimado then
+        print("Ainda pode faltar combustivel. Recomenda-se abastecer mais antes de continuar.")
+    end
+    print("")
+end
+
+------------------------------------------------------------
+-- CONFIRMACAO
+------------------------------------------------------------
+
+if not lerSimNao("Deseja iniciar a mineracao agora?") then
+    print("Mineracao cancelada pelo usuario.")
+    return
+end
+
+------------------------------------------------------------
+-- MINERACAO EM PADRAO "COBRA" (BOUSTROPHEDON)
+------------------------------------------------------------
+
+print("Iniciando mineracao...")
+
+local blocosMineradosEstimados = 0
+
+for camada = 1, altura do
+    for linha = 1, profundidade do
+        -- Cava a linha (largura - 1 movimentos, largura blocos cavados no total
+        -- pois o bloco de baixo/cima ja e tratado pelas funcoes de movimento)
+        for passo = 1, largura - 1 do
+            mover_frente()
+            cavarCimaSeNecessario()
+            cavarBaixoSeNecessario()
+            blocosMineradosEstimados = blocosMineradosEstimados + 1
+            verificarEDescarregar()
         end
 
-        if linha < COMPRIMENTO then
-            if linha % 2 == 1 then
-                virarEsquerda()
-                moverFrente()
-                virarEsquerda()
-            else
-                virarDireita()
-                moverFrente()
-                virarDireita()
+        -- Se nao for a ultima linha da camada, vira para trocar de fileira
+        if linha < profundidade then
+            if facing == 0 or facing == 2 then
+                -- Alterna a direcao da "cobra"
+                if (linha % 2) == 1 then
+                    virar_direita()
+                    mover_frente()
+                    virar_direita()
+                else
+                    virar_esquerda()
+                    mover_frente()
+                    virar_esquerda()
+                end
             end
         end
     end
-end
 
--- ============================================================
---  Execução principal
--- ============================================================
+    -- Vira de volta para a direcao original antes de descer (facilita logica)
+    virarPara(0)
 
-print("=== Minerando " .. LARGURA .. "x" .. COMPRIMENTO .. "x" .. CAMADAS .. " ===")
-
-for camada = 1, CAMADAS do
-    print(">> Camada " .. camada .. "/" .. CAMADAS
-          .. "  pos=(" .. pos.x .. "," .. pos.z .. ")  face=" .. face)
-
-    minerarCamada()
-
-    if camada < CAMADAS then
-        retornarOrigem()  -- volta a (0,0) SEM minerar nada no caminho
-        moverCima()       -- sobe 1 bloco
-        minarCima()       -- limpa teto da nova camada
+    -- Desce para a proxima camada, se houver
+    if camada < altura then
+        mover_baixo()
+        cavarCimaSeNecessario()
     end
 end
 
+------------------------------------------------------------
+-- RETORNO AO PONTO INICIAL E DESCARGA FINAL
+------------------------------------------------------------
+
+print("Mineracao concluida! Retornando ao ponto inicial...")
+irParaCoordenada(0, 0, 0)
+virarPara(0)
+descarregarNaChestInicial()
+
 print("")
-print("============================================")
-print("  Mineracao concluida!")
-print("  Combustivel restante: " .. turtle.getFuelLevel())
-print("============================================")
+print("=== MINERACAO FINALIZADA ===")
+print(string.format("Area minerada: %d x %d x %d", largura, profundidade, altura))
+print(string.format("Blocos processados (estimado): %d", blocosMineradosEstimados))
+print("A turtle esta de volta ao ponto inicial.")
