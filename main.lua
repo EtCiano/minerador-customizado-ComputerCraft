@@ -1,20 +1,10 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 pos = {x = 1, y = 1, z = 1}
 
--- Variáveis globais diretas para as direções
-
---        1       
---        |       
---   4----+----2 
---        |       
---        3       
-
 NORTE = 1
 LESTE = 2
 SUL = 3
 OESTE = 4
-
--- Variáveis globais diretas para os sentidos
 
 CIMA = 1
 FRENTE = 2
@@ -82,8 +72,57 @@ function andar(sentido)
     end
 end
 
-function movimentacaoSecundaria(alvo)
+function interfaceEmTexto()
+    print("=== Configuracao da Mineracao ===")
 
+    io.write("Largura (eixo X): ")
+    local x = tonumber(read())
+    io.write("Altura (eixo Y): ")
+    local y = tonumber(read())
+    io.write("Profundidade (eixo Z): ")
+    local z = tonumber(read())
+
+    if not x or not y or not z or x < 1 or y < 1 or z < 1 then
+        print("Valores invalidos! Usando tamanho padrao (3x3x3).")
+    else
+        size = {x = x, y = y, z = z}
+    end
+
+    local totalBlocos = size.x * size.y * size.z
+    local combustivelAtual = turtle.getFuelLevel()
+    local combustivelEstimado = totalBlocos
+
+    print("")
+    print("=== Informacoes da Mineracao ===")
+    print(("Tamanho: %dx%dx%d (X x Y x Z)"):format(size.x, size.y, size.z))
+    print(("Total de blocos a minerar: %d"):format(totalBlocos))
+
+    if combustivelAtual == "unlimited" then
+        print("Combustivel atual: ilimitado")
+        print("Combustivel suficiente: SIM")
+    else
+        print(("Combustivel atual: %d"):format(combustivelAtual))
+        print(("Combustivel necessario (estimado): %d"):format(combustivelEstimado))
+        if combustivelAtual >= combustivelEstimado then
+            print("Combustivel suficiente: SIM")
+        else
+            print(("Combustivel suficiente: NAO (faltam aprox. %d)"):format(combustivelEstimado - combustivelAtual))
+        end
+    end
+
+    print("")
+    io.write("Deseja iniciar a mineracao? (s/n): ")
+    local resposta = read()
+
+    if resposta ~= "s" and resposta ~= "S" then
+        print("Mineracao cancelada pelo usuario.")
+        return false
+    end
+
+    return true
+end
+
+function movimentacaoSecundaria(alvo)
     if pos.x < alvo.x then
         girar(LESTE)
     elseif pos.x > alvo.x then
@@ -102,7 +141,6 @@ function movimentacaoSecundaria(alvo)
         andar(FRENTE)
     end
 
-
     if pos.y < alvo.y then
         while pos.y < alvo.y do
             andar(CIMA)
@@ -115,6 +153,10 @@ function movimentacaoSecundaria(alvo)
 end
 
 function main()
+    if not interfaceEmTexto() then
+        return
+    end
+
     for iy = 1, size.y, 1 do
         if iy % 2 ~= 0 then
             for iz = 1, size.z, 1 do
@@ -144,6 +186,20 @@ function main()
             end
         end
     end
+
+    print("")
+    print("=== Mineracao Concluida ===")
+    print(("Tamanho minerado: %dx%dx%d"):format(size.x, size.y, size.z))
+    print(("Total de blocos percorridos: %d"):format(size.x * size.y * size.z))
+
+    local combustivelFinal = turtle.getFuelLevel()
+    if combustivelFinal == "unlimited" then
+        print("Combustivel restante: ilimitado")
+    else
+        print(("Combustivel restante: %d"):format(combustivelFinal))
+    end
+
+    print(("Posicao final: x=%d, y=%d, z=%d"):format(pos.x, pos.y, pos.z))
 end
 
 main()
