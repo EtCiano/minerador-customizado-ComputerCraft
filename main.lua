@@ -1,5 +1,6 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 pos = {x = 1, y = 1, z = 1}
+posBau = {x = 1, y = 1, z = 1}
 
 NORTE = 1
 LESTE = 2
@@ -153,7 +154,7 @@ function movimentacaoSecundaria(alvo)
 end
 
 function depositarItens()
-    movimentacaoSecundaria({x = 0, y = 0, z = 0})
+    movimentacaoSecundaria(posBau)
     girar(NORTE)
 
     local itensDepositados = 0
@@ -207,12 +208,13 @@ function main()
         end
     end
 
-    depositarItens()
-    
+    local totalDepositado = depositarItens()
+
     print("")
     print("=== Mineracao Concluida ===")
     print(("Tamanho minerado: %dx%dx%d"):format(size.x, size.y, size.z))
     print(("Total de blocos percorridos: %d"):format(size.x * size.y * size.z))
+    print(("Itens depositados no bau: %d"):format(totalDepositado))
 
     local combustivelFinal = turtle.getFuelLevel()
     if combustivelFinal == "unlimited" then
