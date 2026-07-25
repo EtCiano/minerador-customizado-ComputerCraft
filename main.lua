@@ -36,7 +36,7 @@ function girar(alvoDirecao)
 end
 
 function informarCoordenadas()
-    print('minerei ', pos.x, pos.y, pos.z, '(', gps.locate(), ')')
+    print('minerei ', pos.x, pos.y, pos.z)
 end
 
 function andar(sentido)
