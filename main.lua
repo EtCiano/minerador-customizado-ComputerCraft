@@ -13,9 +13,13 @@ FRENTE = 2
 BAIXO = 3
 TRAS = 4
 
+HORIZONTAL = 1
+VERTICAL = 2
+
 direcao = NORTE
 
 size = {x = 3, y = 3, z = 3} -- padrão
+tipoEscavacao = HORIZONTAL -- padrão
 
 function girar(alvoDirecao)
     while direcao ~= alvoDirecao do
@@ -82,6 +86,21 @@ function andar(sentido)
     end
 end
 
+function perguntarTipoEscavacao()
+    print("")
+    print("=== Tipo de Escavacao ===")
+    print("H - Camadas horizontais (varre X/Z, sobe em Y)")
+    print("V - Camadas verticais (varre X/Y, avanca em Z)")
+    io.write("Escolha o tipo (H/V): ")
+    local resposta = read()
+
+    if resposta == "v" or resposta == "V" then
+        tipoEscavacao = VERTICAL
+    else
+        tipoEscavacao = HORIZONTAL
+    end
+end
+
 function interfaceEmTexto()
     print("=== Configuracao da Mineracao ===")
 
@@ -98,6 +117,8 @@ function interfaceEmTexto()
         size = {x = x, y = y, z = z}
     end
 
+    perguntarTipoEscavacao()
+
     local totalBlocos = size.x * size.y * size.z
     local combustivelAtual = turtle.getFuelLevel()
     local combustivelEstimado = totalBlocos
@@ -106,6 +127,7 @@ function interfaceEmTexto()
     print("=== Informacoes da Mineracao ===")
     print(("Tamanho: %dx%dx%d (X x Y x Z)"):format(size.x, size.y, size.z))
     print(("Total de blocos a minerar: %d"):format(totalBlocos))
+    print(("Tipo de escavacao: %s"):format(tipoEscavacao == HORIZONTAL and "Horizontal" or "Vertical"))
 
     if combustivelAtual == "unlimited" then
         print("Combustivel atual: ilimitado")
@@ -205,11 +227,8 @@ function verificarEAbastecer()
     end
 end
 
-function main()
-    if not interfaceEmTexto() then
-        return
-    end
-
+-- Camadas horizontais: fixa Y, varre X/Z, sobe de camada em camada
+function mineracaoHorizontal()
     for iy = 1, size.y, 1 do
         if iy % 2 ~= 0 then
             for iz = 1, size.z, 1 do
@@ -227,6 +246,7 @@ function main()
             end
         else
             for iz = size.z, 1, -1 do
+                verificarEAbastecer()
                 if iz % 2 == 0 then
                     movimentacaoSecundaria({x = 1, y = iy, z = iz})
                 else
@@ -240,6 +260,53 @@ function main()
             end
         end
     end
+end
+
+-- Camadas verticais: fixa Z, varre X/Y, avança de camada em camada
+function mineracaoVertical()
+    for iz = 1, size.z, 1 do
+        if iz % 2 ~= 0 then
+            for iy = 1, size.y, 1 do
+                verificarEAbastecer()
+                if iy % 2 == 0 then
+                    movimentacaoSecundaria({x = size.x, y = iy, z = iz})
+                else
+                    movimentacaoSecundaria({x = 1, y = iy, z = iz})
+                end
+            end
+            if size.y % 2 == 0 then
+                movimentacaoSecundaria{x = 1, y = size.y, z = iz}
+            else
+                movimentacaoSecundaria{x = size.x, y = size.y, z = iz}
+            end
+        else
+            for iy = size.y, 1, -1 do
+                verificarEAbastecer()
+                if iy % 2 == 0 then
+                    movimentacaoSecundaria({x = 1, y = iy, z = iz})
+                else
+                    movimentacaoSecundaria({x = size.x, y = iy, z = iz})
+                end
+            end
+            if size.y % 2 == 0 then
+                movimentacaoSecundaria{x = size.x, y = 1, z = iz}
+            else
+                movimentacaoSecundaria{x = 1, y = 1, z = iz}
+            end
+        end
+    end
+end
+
+function main()
+    if not interfaceEmTexto() then
+        return
+    end
+
+    if tipoEscavacao == HORIZONTAL then
+        mineracaoHorizontal()
+    else
+        mineracaoVertical()
+    end
 
     local totalDepositado = depositarItens()
 
@@ -247,6 +314,7 @@ function main()
     print("=== Mineracao Concluida ===")
     print(("Tamanho minerado: %dx%dx%d"):format(size.x, size.y, size.z))
     print(("Total de blocos percorridos: %d"):format(size.x * size.y * size.z))
+    print(("Tipo de escavacao: %s"):format(tipoEscavacao == HORIZONTAL and "Horizontal" or "Vertical"))
     print(("Itens depositados no bau: %d"):format(totalDepositado))
 
     local combustivelFinal = turtle.getFuelLevel()
