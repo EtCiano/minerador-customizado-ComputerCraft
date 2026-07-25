@@ -111,21 +111,20 @@ function movimentacaoSecundaria(alvo)
     end
 end
 
-
-
-
-for iy = 1, size.y, 1 do
-    movimentacaoSecundaria({x = 1, y = iy, z = 1})
-    for iz = 1, size.z, 1 do
-        if iz % 2 == 0 then
-            movimentacaoSecundaria({x = size.x, y = iy, z = iz})
-        else
-            movimentacaoSecundaria({x = 1, y = iy, z = iz})
+function main()
+    for iy = 1, size.y, 1 do
+        movimentacaoSecundaria({x = 1, y = iy, z = 1})
+        for iz = 1, size.z, 1 do
+            if iz % 2 == 0 then
+                movimentacaoSecundaria({x = size.x, y = iy, z = iz})
+            else
+                movimentacaoSecundaria({x = 1, y = iy, z = iz})
+            end
         end
-    end
-    if size.z % 2 == 0 then
-        movimentacaoSecundaria{x = 1, y = iy, z = size.z}
-    else
-        movimentacaoSecundaria{x = size.x, y = iy, z = size.z}
+        if size.z % 2 == 0 then
+            movimentacaoSecundaria{x = 1, y = iy, z = size.z}
+        else
+            movimentacaoSecundaria{x = size.x, y = iy, z = size.z}
+        end
     end
 end
