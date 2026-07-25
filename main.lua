@@ -35,11 +35,16 @@ function girar(alvoDirecao)
     end
 end
 
+function informarCoordenadas()
+    print('minerei ', pos.x, pos.y, pos.z, '(', gps.locate(), ')')
+end
+
 function andar(sentido)
     if sentido == CIMA then
         turtle.digUp()
         turtle.up()
         pos.y = pos.y + 1
+        informarCoordenadas()
 
     elseif sentido == FRENTE then
         turtle.dig()
@@ -53,11 +58,13 @@ function andar(sentido)
         elseif direcao == OESTE then
             pos.x = pos.x - 1
         end
+        informarCoordenadas()
 
     elseif sentido == BAIXO then
         turtle.digDown()
         turtle.down()
         pos.y = pos.y - 1
+        informarCoordenadas()
 
     elseif sentido == TRAS then
         turtle.back()
@@ -70,6 +77,7 @@ function andar(sentido)
         elseif direcao == OESTE then
             pos.x = pos.x + 1
         end
+        informarCoordenadas()
     end
 end
 
