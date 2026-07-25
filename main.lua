@@ -152,6 +152,26 @@ function movimentacaoSecundaria(alvo)
     end
 end
 
+function depositarItens()
+    movimentacaoSecundaria({x = 0, y = 0, z = 0})
+    girar(NORTE)
+
+    local itensDepositados = 0
+    for slot = 1, 16 do
+        local detalhe = turtle.getItemDetail(slot)
+        if detalhe then
+            turtle.select(slot)
+            local quantidade = turtle.getItemCount(slot)
+            if turtle.drop() then
+                itensDepositados = itensDepositados + quantidade
+            end
+        end
+    end
+    turtle.select(1)
+
+    return itensDepositados
+end
+
 function main()
     if not interfaceEmTexto() then
         return
@@ -187,6 +207,8 @@ function main()
         end
     end
 
+    depositarItens()
+    
     print("")
     print("=== Mineracao Concluida ===")
     print(("Tamanho minerado: %dx%dx%d"):format(size.x, size.y, size.z))
