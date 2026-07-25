@@ -46,10 +46,12 @@ end
 
 function andar(sentido)
     if sentido == CIMA then
+        turtle.digUp()
         turtle.up()
         pos.y = pos.y + 1
 
     elseif sentido == FRENTE then
+        turtle.dig()
         turtle.forward()
         if direcao == NORTE then
             pos.z = pos.z + 1
@@ -62,6 +64,7 @@ function andar(sentido)
         end
 
     elseif sentido == BAIXO then
+        turtle.digDown()
         turtle.down()
         pos.y = pos.y - 1
 
