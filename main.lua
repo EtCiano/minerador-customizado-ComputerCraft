@@ -1,6 +1,7 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 pos = {x = 1, y = 1, z = 1}
 posBau = {x = 1, y = 1, z = 1}
+LIMITE_COMBUSTIVEL = 1000
 
 NORTE = 1
 LESTE = 2
@@ -181,6 +182,29 @@ function depositarItens()
     return itensDepositados
 end
 
+function verificarEAbastecer()
+    local nivelAtual = turtle.getFuelLevel()
+
+    if nivelAtual == "unlimited" then return end
+    
+    if nivelAtual < LIMITE_COMBUSTIVEL then
+        print("Combustível baixo (" .. nivelAtual .. "). Procurando combustível...")
+        
+        for slot = 1, 16 do
+            turtle.select(slot)
+            if turtle.refuel(0) then
+                turtle.refuel()
+            end
+            
+            if turtle.getFuelLevel() >= LIMITE_COMBUSTIVEL then
+                break
+            end
+        end
+        
+        print("Novo nível de combustível: " .. turtle.getFuelLevel())
+    end
+end
+
 function main()
     if not interfaceEmTexto() then
         return
@@ -189,6 +213,7 @@ function main()
     for iy = 1, size.y, 1 do
         if iy % 2 ~= 0 then
             for iz = 1, size.z, 1 do
+                verificarEAbastecer()
                 if iz % 2 == 0 then
                     movimentacaoSecundaria({x = size.x, y = iy, z = iz})
                 else
