@@ -116,7 +116,7 @@ end
 
 function main()
     for iy = 1, size.y, 1 do
-        if iz % 2 ~= 0 then
+        if iy % 2 ~= 0 then
             for iz = 1, size.z, 1 do
                 if iz % 2 == 0 then
                     movimentacaoSecundaria({x = size.x, y = iy, z = iz})
