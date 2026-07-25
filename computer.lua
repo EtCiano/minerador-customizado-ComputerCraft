@@ -1,8 +1,11 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 
-rednet.open("right") -- ajuste o lado onde está o modem
+local PROTOCOLO_REGISTRO = "mineracao_registro"
+local PROTOCOLO_CONFIG   = "mineracao_config"
+local PROTOCOLO_INICIO   = "mineracao_inicio"
+local LADO_MODEM = "back" -- ajuste para o lado onde o modem esta instalado
 
-local PROTOCOLO = "mineracao"
+rednet.open(LADO_MODEM)
 
 print("=== Servidor de Mineracao ===")
 io.write("Largura (eixo X): ")
@@ -23,7 +26,7 @@ print("Aguardando turtles se registrarem... (" .. numTurtles .. " esperadas)")
 
 local turtlesConectadas = {}
 while #turtlesConectadas < numTurtles do
-    local id, msg = rednet.receive(PROTOCOLO, 30)
+    local id, msg = rednet.receive(PROTOCOLO_REGISTRO, 30)
     if id and msg == "pronto" then
         table.insert(turtlesConectadas, id)
         print("Turtle " .. id .. " conectada (" .. #turtlesConectadas .. "/" .. numTurtles .. ")")
@@ -33,19 +36,23 @@ while #turtlesConectadas < numTurtles do
     end
 end
 
+if #turtlesConectadas == 0 then
+    print("Nenhuma turtle conectada. Abortando.")
+    return
+end
+
 -- Envia configuração individual (com offset em X para não colidirem)
 for i, id in ipairs(turtlesConectadas) do
     local config = {
         size = {x = x, y = y, z = z},
-        tipoEscavacao = tipo,
-        offsetX = (i - 1) * (x + 2) -- espaça cada turtle lado a lado
+        tipoEscavacao = tipo
     }
-    rednet.send(id, config, PROTOCOLO)
+    rednet.send(id, config, PROTOCOLO_CONFIG)
 end
 
-print("Configuracao enviada. Iniciando em 3 segundos...")
+print("Configuracao enviada para " .. #turtlesConectadas .. " turtle(s).")
+print("Iniciando em 3 segundos...")
 sleep(3)
 
--- Sinal de início simultâneo
-rednet.broadcast("iniciar", PROTOCOLO)
+rednet.broadcast("iniciar", PROTOCOLO_INICIO)
 print("Comando de inicio enviado para todas as turtles!")

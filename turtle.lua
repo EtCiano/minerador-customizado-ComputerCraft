@@ -1,7 +1,9 @@
 ---@diagnostic disable: undefined-global, lowercase-global
 
 -- ===== CONFIGURACAO DE REDE =====
-local PROTOCOLO = "mineracao"
+local PROTOCOLO_REGISTRO = "mineracao_registro"
+local PROTOCOLO_CONFIG   = "mineracao_config"
+local PROTOCOLO_INICIO   = "mineracao_inicio"
 local LADO_MODEM = "right" -- ajuste para o lado onde o modem esta instalado
 
 pos = {x = 1, y = 1, z = 1}
@@ -91,17 +93,17 @@ function andar(sentido)
     end
 end
 
--- ===== INTERFACE VIA REDE (substitui a interface via teclado) =====
+-- ===== INTERFACE VIA REDE =====
 function interfaceEmTexto()
     if not rednet.isOpen(LADO_MODEM) then
         rednet.open(LADO_MODEM)
     end
 
     print("=== Aguardando servidor de mineracao ===")
-    rednet.broadcast("pronto", PROTOCOLO)
+    rednet.broadcast("pronto", PROTOCOLO_REGISTRO)
     print("Sinal 'pronto' enviado. Aguardando configuracao...")
 
-    local idServidor, config = rednet.receive(PROTOCOLO)
+    local idServidor, config = rednet.receive(PROTOCOLO_CONFIG)
 
     if not config or not config.size then
         print("Configuracao invalida recebida. Abortando.")
@@ -110,6 +112,7 @@ function interfaceEmTexto()
 
     size = config.size
     tipoEscavacao = (config.tipoEscavacao == "VERTICAL") and VERTICAL or HORIZONTAL
+    -- (remova completamente o if config.offsetX então ... end)
 
     -- aplica offset para essa turtle nao colidir com as outras
     if config.offsetX then
@@ -137,7 +140,13 @@ function interfaceEmTexto()
 
     print("")
     print("Aguardando sinal de inicio do servidor...")
-    local idInicio, sinal = rednet.receive(PROTOCOLO)
+
+    -- Só aceita o sinal se vier especificamente do servidor que enviou a config
+    local sinal
+    repeat
+        local idRemetente
+        idRemetente, sinal = rednet.receive(PROTOCOLO_INICIO)
+    until idRemetente == idServidor
 
     if sinal ~= "iniciar" then
         print("Sinal invalido recebido. Abortando.")
